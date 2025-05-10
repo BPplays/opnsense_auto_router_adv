@@ -12,6 +12,19 @@ import (
 	probing "github.com/prometheus-community/pro-bing"
 )
 
+type arrayFlags []string
+
+// String is an implementation of the flag.Value interface
+func (i *arrayFlags) String() string {
+    return fmt.Sprintf("%v", *i)
+}
+
+// Set is an implementation of the flag.Value interface
+func (i *arrayFlags) Set(value string) error {
+    *i = append(*i, value)
+    return nil
+}
+
 func pingHost(addr string, count int) (bool, error) {
 	pinger, err := probing.NewPinger(addr)
 	if err != nil {
@@ -73,21 +86,29 @@ func checkServers(servers []string) bool {
 }
 
 func main() {
-	var serverList string
-	flag.StringVar(&serverList, "servers", "", "Comma-separated list of servers to ping")
-	flag.Parse()
+	var servers arrayFlags
+	var loop bool
+	for {
+		flag.Var(&servers, "s", "list of servers to ping")
+		flag.BoolVar(&loop, "l", false, "if to do loop")
+		flag.Parse()
 
-	if serverList == "" {
-		fmt.Fprintln(os.Stderr, "Usage: -servers=host1,host2,...")
-		os.Exit(1)
+		if len(servers) <= 0 {
+			fmt.Fprintln(os.Stderr, "Usage: -servers=host1,host2,...")
+			os.Exit(1)
+		}
+
+		fmt.Printf("Checking %d hosts...\n", len(servers))
+		fmt.Println(servers)
+
+		anyUp := checkServers(servers)
+		fmt.Printf("Any successful pings: %v\n", anyUp)
+
+		if loop {
+			time.Sleep(10 * time.Second)
+		} else {
+			break
+		}
 	}
-
-	servers := strings.Split(serverList, ",")
-	fmt.Printf("Checking %d hosts...\n", len(servers))
-
-	anyUp := checkServers(servers)
-	fmt.Printf("Any successful pings: %v\n", anyUp)
-
-	time.Sleep(10 * time.Second)
 }
 

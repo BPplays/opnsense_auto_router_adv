@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -11,28 +12,29 @@ import (
 	probing "github.com/prometheus-community/pro-bing"
 )
 
-func pingHost(addr string, count int) bool {
+func pingHost(addr string, count int) (bool, error) {
 	pinger, err := probing.NewPinger(addr)
 	if err != nil {
-		fmt.Printf("Failed to create pinger for %s: %v\n", addr, err)
-		return false
+		// fmt.Printf("Failed to create pinger for %s: %v\n", addr, err)
+		return false, err
 	}
 
 	pinger.Count = count
 	pinger.Timeout = time.Duration(count) * time.Second
 	pinger.SetPrivileged(true)
+	pinger.SetTrafficClass(0)
 
 	gotReply := false
 	pinger.OnRecv = func(pkt *probing.Packet) {
 		gotReply = true
 	}
 
-	err = pinger.Run()
-	if err != nil {
-		fmt.Printf("Error running pinger for %s: %v\n", addr, err)
+	if err := pinger.Run(); err != nil {
+		// fmt.Printf("Error running pinger for %s: %v\n", addr, err)
+		return false, err
 	}
 
-	return gotReply
+	return gotReply, nil
 }
 
 func checkServers(servers []string) bool {
@@ -47,8 +49,12 @@ func checkServers(servers []string) bool {
 		wg.Add(1)
 		go func(host string) {
 			defer wg.Done()
-			ok := pingHost(host, 5)
-			results <- ok
+			r, err := pingHost(host, 5)
+			if err != nil {
+				log.Println(err)
+			}
+
+			results <- r
 		}(h)
 	}
 
